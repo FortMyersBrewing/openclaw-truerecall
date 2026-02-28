@@ -82,8 +82,8 @@ def main():
             return
         
         for i, r in enumerate(results, 1):
-            agent = r["payload"].get("agent", "?")
-            role = r["payload"]["role"]
+            agent = r["payload"].get("agent", r["payload"].get("source_agent", "?"))
+            role = r["payload"].get("role", "gem")
             score = r["score"]
             content = r["payload"]["content"][:200]
             ts = r["payload"].get("timestamp", "")[:19]
