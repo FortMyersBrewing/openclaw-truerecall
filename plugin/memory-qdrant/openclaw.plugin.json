@@ -1,0 +1,58 @@
+{
+  "id": "memory-qdrant",
+  "kind": "memory",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "qdrantUrl": {
+        "type": "string",
+        "description": "Qdrant server URL",
+        "default": "http://localhost:6333"
+      },
+      "ollamaUrl": {
+        "type": "string",
+        "description": "Ollama server URL",
+        "default": "http://localhost:11434"
+      },
+      "embeddingModel": {
+        "type": "string",
+        "description": "Ollama embedding model name",
+        "default": "snowflake-arctic-embed2"
+      },
+      "collection": {
+        "type": "string",
+        "description": "Qdrant collection name",
+        "default": "memories_tr"
+      },
+      "vectorDim": {
+        "type": "integer",
+        "description": "Vector dimensions",
+        "default": 1024
+      },
+      "autoRecall": {
+        "type": "boolean",
+        "description": "Automatically recall relevant memories before agent start",
+        "default": true
+      },
+      "autoCapture": {
+        "type": "boolean",
+        "description": "Automatically capture important memories after conversation",
+        "default": false
+      },
+      "minScore": {
+        "type": "number",
+        "description": "Minimum similarity score for memory recall",
+        "default": 0.4,
+        "minimum": 0,
+        "maximum": 1
+      },
+      "maxResults": {
+        "type": "integer",
+        "description": "Maximum number of memories to recall",
+        "default": 5,
+        "minimum": 1
+      }
+    },
+    "required": ["qdrantUrl", "ollamaUrl", "embeddingModel", "collection", "vectorDim"]
+  }
+}
