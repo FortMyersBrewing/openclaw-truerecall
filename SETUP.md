@@ -292,3 +292,30 @@ Mercury 2 uses internal reasoning tokens that count against `max_tokens` but don
 
 **Important:** Set `max_tokens` high enough to cover both reasoning overhead AND your expected output.
 If `finish_reason: "length"` appears, the response was truncated — increase `max_tokens`.
+
+## Why Inception Mercury 2 for Gems
+
+We chose [Inception's Mercury 2](https://docs.inceptionlabs.ai) for the Gems extraction pipeline:
+
+- **Diffusion-based LLM** — generates text through discrete diffusion (not autoregressive), resulting in 5-10x faster inference than comparable models
+- **Cost:** $0.25/1M input tokens, $0.75/1M output tokens — roughly 60x cheaper than Opus
+- **Speed:** ~1 second per classification/extraction call
+- **JSON mode:** Supports `response_format: { type: "json_object" }` and structured outputs
+- **Reasoning control:** `reasoning_effort` parameter (instant/low/medium/high) lets you dial down internal reasoning for simple tasks, saving hidden token budget
+
+Mercury is used specifically for the Gems pipeline (high-volume, simple classification). The main agent still runs on Claude for complex reasoning, coding, and conversation.
+
+### Mercury API Notes
+- Hidden reasoning tokens consume from `max_tokens` budget — set higher than expected output
+- Temperature clamped to [0.5, 1.0]
+- `reasoning_effort: "low"` is optimal for classification tasks
+- Available models: mercury, mercury-2, mercury-coder, mercury-edit
+
+### Swapping Providers
+The Gems extractor is provider-agnostic. To use a different LLM:
+```bash
+export LLM_API_URL="https://api.openai.com/v1/chat/completions"  
+export LLM_API_KEY="sk-..."
+export LLM_MODEL="gpt-4o-mini"
+```
+Any OpenAI-compatible chat completions API works.
