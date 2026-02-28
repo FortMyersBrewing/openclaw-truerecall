@@ -26,7 +26,7 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "snowflake-arctic-embed2")
 USER_ID = os.getenv("USER_ID", "rob")
 
 # Paths
-SESSIONS_DIR = Path("/root/.openclaw/agents/main/sessions")
+SESSIONS_DIR = Path(os.getenv("SESSIONS_DIR", "/root/.openclaw/agents/main/sessions"))
 
 # State
 running = True
