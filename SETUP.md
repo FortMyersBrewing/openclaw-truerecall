@@ -198,3 +198,77 @@ for r in results:
 - Change USER_ID to "quinn"
 - Change SESSIONS_DIR to Quinn's sessions path
 - Same Qdrant collection (shared) OR separate collection per agent
+
+---
+
+## FMBrew Deployment: AVA (Mac mini)
+
+### Machine
+- **Host:** Ava's Mac mini, macOS 26.2, Apple Silicon
+- **IP:** 192.168.10.5 (Ethernet) / 192.168.10.4 (WiFi)
+- **User:** ava
+
+### Services Running
+| Service | How | Auto-start |
+|---------|-----|------------|
+| Ollama | `brew services` | Yes (login) |
+| Docker Desktop | App (GUI) | Yes (login) |
+| Qdrant | Docker container | Yes (`--restart unless-stopped`) |
+| TrueRecall Watcher | launchd plist | Yes (`KeepAlive`) |
+
+### Paths
+- **Repo clone:** `/Users/ava/projects/openclaw-true-recall-base`
+- **Python venv:** `/Users/ava/projects/openclaw-true-recall-base/venv`
+- **Launcher script:** `/Users/ava/projects/openclaw-true-recall-base/run-watcher.sh`
+- **launchd plist:** `/Users/ava/Library/LaunchAgents/com.openclaw.truerecall-watcher.plist`
+- **Sessions watched:** `/Users/ava/.openclaw/agents/main/sessions`
+- **Watcher log:** `/tmp/truerecall-watcher.log`
+- **Watcher errors:** `/tmp/truerecall-watcher.err`
+
+### Qdrant Collection
+- **Name:** `memories_tr`
+- **Dimensions:** 1024
+- **Distance:** Cosine
+- **Embedding model:** `snowflake-arctic-embed2` (via Ollama)
+
+### Config Values
+```
+QDRANT_URL=http://localhost:6333
+OLLAMA_URL=http://localhost:11434
+USER_ID=ava
+SESSIONS_DIR=/Users/ava/.openclaw/agents/main/sessions
+```
+
+### What's Custom vs Upstream
+1. `watcher/realtime_qdrant_watcher.py` — patched `SESSIONS_DIR` to read from env var
+2. `run-watcher.sh` — launcher script that activates venv + sets env vars (upstream uses systemd)
+3. launchd plist — replaces upstream's systemd service file
+4. Collection created with 1024 dims (upstream README says 768 — that's wrong)
+5. Env vars baked into launcher script (not plist) due to macOS launchd quirk
+
+### Backfill Status
+- **Date:** 2026-02-28
+- **Sessions:** 88 JSONL files
+- **Status:** Running (background process `dawn-kelp`)
+
+### Management Commands
+```bash
+# Check watcher status
+launchctl list | grep truerecall
+cat /tmp/truerecall-watcher.log | tail -20
+
+# Restart watcher
+launchctl unload ~/Library/LaunchAgents/com.openclaw.truerecall-watcher.plist
+launchctl load ~/Library/LaunchAgents/com.openclaw.truerecall-watcher.plist
+
+# Check Qdrant stats
+curl -s http://localhost:6333/collections/memories_tr | python3 -m json.tool
+
+# Search Qdrant (quick test)
+# See Verification section above
+
+# Pull upstream changes
+git fetch upstream
+git merge upstream/main
+git push origin main
+```
