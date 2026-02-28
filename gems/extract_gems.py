@@ -117,7 +117,7 @@ def llm_extract(content, role, max_retries=2):
             {"role": "user", "content": user_msg}
         ],
         "temperature": 0.5,
-        "max_tokens": 300,
+        "max_tokens": 1000,
         "response_format": {"type": "json_object"}
     }
 
@@ -135,7 +135,15 @@ def llm_extract(content, role, max_retries=2):
         try:
             resp = urllib.request.urlopen(req, timeout=30)
             result = json.loads(resp.read())
-            content_str = result["choices"][0]["message"]["content"]
+            choice = result["choices"][0]
+            content_str = choice["message"]["content"]
+            finish_reason = choice.get("finish_reason", "")
+            
+            # If the model ran out of tokens, the JSON is likely truncated
+            if finish_reason == "length":
+                usage = result.get("usage", {})
+                reasoning = usage.get("reasoning_tokens", 0)
+                print(f"  ⚠️ Truncated response (reasoning used {reasoning} tokens)", file=sys.stderr, flush=True)
 
             # Try direct parse first
             try:
