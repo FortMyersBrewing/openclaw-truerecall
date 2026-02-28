@@ -272,3 +272,23 @@ git fetch upstream
 git merge upstream/main
 git push origin main
 ```
+
+## Mercury 2 API Reference (Key Parameters)
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `reasoning_effort` | string | `"medium"` | `instant`, `low`, `medium`, `high` — controls hidden reasoning tokens |
+| `reasoning_summary` | boolean | `true` | Return reasoning summary (we don't use it) |
+| `reasoning_summary_wait` | boolean | `false` | Wait for summary before returning |
+| `diffusing` | boolean | `false` | Enable diffusion streaming (requires `stream: true`) |
+| `temperature` | number | `0.75` | Range: 0.5–1.0 (clamped) |
+| `max_tokens` | number | `8192` | Range: 1–50,000. **Includes hidden reasoning tokens!** |
+
+### Hidden Reasoning Token Budget
+Mercury 2 uses internal reasoning tokens that count against `max_tokens` but don't appear in output.
+- `reasoning_effort: "instant"` → ~0-20 reasoning tokens
+- `reasoning_effort: "low"` → ~20-60 reasoning tokens
+- `reasoning_effort: "medium"` → ~50-200 reasoning tokens
+- `reasoning_effort: "high"` → ~100-500+ reasoning tokens
+
+**Important:** Set `max_tokens` high enough to cover both reasoning overhead AND your expected output.
+If `finish_reason: "length"` appears, the response was truncated — increase `max_tokens`.
