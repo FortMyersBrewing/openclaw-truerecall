@@ -359,11 +359,12 @@ async function startSSE() {
     app.use((req, res, next) => {
       if (req.path === "/health") return next();
       const auth = req.headers.authorization;
-      if (!auth || auth !== `Bearer ${MCP_AUTH_TOKEN}`) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
+      const queryToken = req.query.token as string | undefined;
+      if (auth === `Bearer ${MCP_AUTH_TOKEN}` || queryToken === MCP_AUTH_TOKEN) {
+        return next();
       }
-      next();
+      res.status(401).json({ error: "Unauthorized" });
+      return;
     });
     console.log("Authentication enabled (MCP_AUTH_TOKEN set)");
   } else {
