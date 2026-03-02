@@ -146,6 +146,7 @@ async function qdrantScroll(
 // MCP Server
 // ============================================================================
 
+function createServer(): McpServer {
 const server = new McpServer({
   name: "truerecall",
   version: "1.0.0",
@@ -310,6 +311,12 @@ server.tool(
   },
 );
 
+return server;
+}
+
+// Create default instance for stdio mode
+const server = createServer();
+
 // ============================================================================
 // Start
 // ============================================================================
@@ -384,11 +391,9 @@ async function startSSE() {
       delete transports[sessionId];
     };
 
-    // Each SSE connection gets its own server instance sharing the same tools
-    const sessionServer = new McpServer({ name: "truerecall", version: "1.0.0" });
-    // Re-register tools on session server (tools are on the module-level `server`)
-    // Instead, connect the module-level server
-    await server.connect(transport);
+    // Create a fresh server instance per session
+    const sessionServer = createServer();
+    await sessionServer.connect(transport);
     console.log(`SSE session established: ${sessionId}`);
   });
 
