@@ -2,6 +2,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
@@ -334,10 +335,81 @@ async function ensureTimestampIndex(): Promise<void> {
   }
 }
 
-async function main() {
+const TRANSPORT = process.env.MCP_TRANSPORT ?? "stdio";
+const PORT = parseInt(process.env.MCP_PORT ?? "3100", 10);
+const HOST = process.env.MCP_HOST ?? "0.0.0.0";
+
+async function startStdio() {
   await ensureTimestampIndex();
   const transport = new StdioServerTransport();
   await server.connect(transport);
+}
+
+async function startSSE() {
+  await ensureTimestampIndex();
+
+  const { default: express } = await import("express");
+  const app = express();
+  app.use(express.json());
+
+  // Store transports by session ID
+  const transports: Record<string, SSEServerTransport> = {};
+
+  // SSE endpoint — client GETs this to open the event stream
+  app.get("/sse", async (req, res) => {
+    const transport = new SSEServerTransport("/messages", res);
+    const sessionId = transport.sessionId;
+    transports[sessionId] = transport;
+
+    transport.onclose = () => {
+      delete transports[sessionId];
+    };
+
+    // Each SSE connection gets its own server instance sharing the same tools
+    const sessionServer = new McpServer({ name: "truerecall", version: "1.0.0" });
+    // Re-register tools on session server (tools are on the module-level `server`)
+    // Instead, connect the module-level server
+    await server.connect(transport);
+    console.log(`SSE session established: ${sessionId}`);
+  });
+
+  // Messages endpoint — client POSTs JSON-RPC here
+  app.post("/messages", async (req, res) => {
+    const sessionId = req.query.sessionId as string;
+    if (!sessionId || !transports[sessionId]) {
+      res.status(404).send("Session not found");
+      return;
+    }
+    await transports[sessionId].handlePostMessage(req, res, req.body);
+  });
+
+  // Health check
+  app.get("/health", (_req, res) => {
+    res.json({ status: "ok", transport: "sse", sessions: Object.keys(transports).length });
+  });
+
+  app.listen(PORT, HOST, () => {
+    console.log(`TrueRecall MCP Server (SSE) listening on http://${HOST}:${PORT}`);
+    console.log(`  SSE endpoint:      GET  http://${HOST}:${PORT}/sse`);
+    console.log(`  Messages endpoint: POST http://${HOST}:${PORT}/messages`);
+    console.log(`  Health check:      GET  http://${HOST}:${PORT}/health`);
+  });
+
+  process.on("SIGINT", async () => {
+    for (const sid of Object.keys(transports)) {
+      await transports[sid].close();
+      delete transports[sid];
+    }
+    process.exit(0);
+  });
+}
+
+async function main() {
+  if (TRANSPORT === "sse" || TRANSPORT === "http") {
+    await startSSE();
+  } else {
+    await startStdio();
+  }
 }
 
 main().catch((err) => {
