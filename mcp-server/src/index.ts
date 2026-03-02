@@ -15,6 +15,8 @@ const OLLAMA_URL = process.env.OLLAMA_URL ?? "http://localhost:11434";
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL ?? "snowflake-arctic-embed2";
 const COLLECTION_NAME = process.env.COLLECTION_NAME ?? "memories_tr";
 
+const MCP_AUTH_TOKEN = process.env.MCP_AUTH_TOKEN ?? "";
+
 const MEMORY_CATEGORIES = [
   "preference", "fact", "decision", "entity",
   "architecture", "solution", "todo", "other",
@@ -351,6 +353,22 @@ async function startSSE() {
   const { default: express } = await import("express");
   const app = express();
   app.use(express.json());
+
+  // Auth middleware — skip health check
+  if (MCP_AUTH_TOKEN) {
+    app.use((req, res, next) => {
+      if (req.path === "/health") return next();
+      const auth = req.headers.authorization;
+      if (!auth || auth !== `Bearer ${MCP_AUTH_TOKEN}`) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      next();
+    });
+    console.log("Authentication enabled (MCP_AUTH_TOKEN set)");
+  } else {
+    console.log("⚠️  No MCP_AUTH_TOKEN set — server is unauthenticated!");
+  }
 
   // Store transports by session ID
   const transports: Record<string, SSEServerTransport> = {};
