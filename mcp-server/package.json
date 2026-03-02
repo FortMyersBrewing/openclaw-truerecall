@@ -1,0 +1,22 @@
+{
+  "name": "truerecall-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for TrueRecall memory system — semantic search, store, and manage memories via Qdrant + Ollama",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "truerecall-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

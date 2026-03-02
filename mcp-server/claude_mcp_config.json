@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "truerecall": {
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/openclaw-truerecall/mcp-server/dist/index.js"],
+      "env": {
+        "QDRANT_URL": "http://localhost:6333",
+        "OLLAMA_URL": "http://localhost:11434",
+        "EMBEDDING_MODEL": "snowflake-arctic-embed2",
+        "COLLECTION_NAME": "memories_tr"
+      }
+    }
+  }
+}
