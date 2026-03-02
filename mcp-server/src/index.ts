@@ -3,6 +3,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
@@ -416,11 +417,40 @@ async function startSSE() {
     res.json({ status: "ok", transport: "sse", sessions: Object.keys(transports).length });
   });
 
+  // Streamable HTTP transport — newer protocol, single endpoint
+  app.post("/mcp", async (req, res) => {
+    const sessionServer = createServer();
+    try {
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined, // stateless
+      });
+      res.on("close", () => {
+        transport.close();
+      });
+      await sessionServer.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+    } catch (error) {
+      console.error("Streamable HTTP error:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Internal server error" });
+      }
+    }
+  });
+
+  // Block GET/DELETE on /mcp per spec
+  app.get("/mcp", (_req, res) => {
+    res.status(405).json({ error: "Method not allowed" });
+  });
+  app.delete("/mcp", (_req, res) => {
+    res.status(405).json({ error: "Method not allowed" });
+  });
+
   app.listen(PORT, HOST, () => {
     console.log(`TrueRecall MCP Server (SSE) listening on http://${HOST}:${PORT}`);
     console.log(`  SSE endpoint:      GET  http://${HOST}:${PORT}/sse`);
     console.log(`  Messages endpoint: POST http://${HOST}:${PORT}/messages`);
     console.log(`  Health check:      GET  http://${HOST}:${PORT}/health`);
+    console.log(`  Streamable HTTP:   POST http://${HOST}:${PORT}/mcp`);
   });
 
   process.on("SIGINT", async () => {
