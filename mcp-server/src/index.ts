@@ -361,10 +361,14 @@ async function startSSE() {
   const app = express();
   app.use(express.json());
 
-  // Auth middleware — skip health check
+  // Auth middleware — skip health check and authenticated sessions
   if (MCP_AUTH_TOKEN) {
     app.use((req, res, next) => {
       if (req.path === "/health") return next();
+      // Allow /messages through if the session is already established (authenticated at /sse)
+      if (req.path === "/messages" && req.query.sessionId && transports[req.query.sessionId as string]) {
+        return next();
+      }
       const auth = req.headers.authorization;
       const queryToken = req.query.token as string | undefined;
       if (auth === `Bearer ${MCP_AUTH_TOKEN}` || queryToken === MCP_AUTH_TOKEN) {
