@@ -52,7 +52,8 @@ Categories: {', '.join(CATEGORIES)}
 
 Rules:
 - Only extract genuinely useful information. Most turns are NOT gems.
-- Skip: greetings, acknowledgments, filler, status updates, routine tool output, heartbeat checks
+- Skip: greetings, acknowledgments, filler, status updates, routine tool output, heartbeat checks, short responses (OMG, yes, ok, lemme try, etc.)
+- Skip: anything that is just conversational noise without lasting informational value
 - Extract: decisions, preferences, personal facts, solutions to problems, architectural choices, important todos
 - Each gem should be a complete, standalone sentence that makes sense without context
 - If a turn contains a credential/secret, note that a credential exists but DO NOT include the actual value
@@ -291,8 +292,8 @@ def process_batch(batch_size=100, user_id="ava", dry_run=False):
         content = payload.get("content", "")
         role = payload.get("role", "unknown")
 
-        # Skip very short content
-        if len(content) < 20:
+        # Skip very short content (< 50 chars or < 5 words = not worth LLM processing)
+        if len(content) < 50 or len(content.split()) < 5:
             if not dry_run:
                 mark_processed(point_id)
             processed += 1
@@ -314,7 +315,7 @@ def process_batch(batch_size=100, user_id="ava", dry_run=False):
             gem_text = gem.get("text", "").strip()
             category = gem.get("category", "fact")
 
-            if not gem_text or len(gem_text) < 10:
+            if not gem_text or len(gem_text) < 30 or len(gem_text.split()) < 5:
                 continue
 
             if category not in CATEGORIES:
