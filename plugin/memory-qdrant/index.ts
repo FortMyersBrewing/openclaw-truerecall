@@ -49,7 +49,7 @@ const DEFAULT_CONFIG: PluginConfig = {
   vectorDim: 1024,
   autoRecall: true,
   autoCapture: false,
-  minScore: 0.4,
+  minScore: 0.55,
   maxResults: 5,
 };
 
@@ -442,10 +442,68 @@ const memoryQdrantPlugin = {
         if (!event.prompt || event.prompt.length < 10) return;
 
         try {
-          const vector = await ollamaEmbed(event.prompt, cfg);
+          // Build a richer search query from recent conversation context
+          // This prevents generic messages (e.g. "[Slack file: Screenshot]")
+          // from returning irrelevant memories
+          let searchQuery = event.prompt;
+
+          if (event.messages && Array.isArray(event.messages)) {
+            const recentUserMessages: string[] = [];
+            // Walk backwards through messages, grab last 5 user messages
+            for (let i = event.messages.length - 1; i >= 0 && recentUserMessages.length < 5; i--) {
+              const msg = event.messages[i] as any;
+              if (msg?.role !== "user") continue;
+              const text = typeof msg.content === "string"
+                ? msg.content
+                : Array.isArray(msg.content)
+                  ? msg.content.find((b: any) => b?.type === "text")?.text
+                  : null;
+              if (!text || text.length < 5) continue;
+              // Skip memory injection blocks
+              if (text.includes("<relevant-memories>")) continue;
+              recentUserMessages.push(text.slice(0, 200));
+            }
+            if (recentUserMessages.length > 0) {
+              // Combine recent context with current prompt for better embedding
+              searchQuery = [...recentUserMessages.reverse(), event.prompt].join("\n");
+              // Cap at ~1000 chars to keep embedding focused
+              if (searchQuery.length > 1000) {
+                searchQuery = searchQuery.slice(-1000);
+              }
+            }
+          }
+
+          api.logger.info?.(
+            `memory-qdrant: search query (${searchQuery.length} chars): ${searchQuery.slice(0, 120)}...`,
+          );
+
+          const vector = await ollamaEmbed(searchQuery, cfg);
           if (!vector) return;
 
-          const memories = await qdrantSearch(vector, cfg);
+          let memories = await qdrantSearch(vector, cfg, (cfg.maxResults ?? 5) * 3);
+          if (memories.length === 0) return;
+
+          // Deduplicate by text content
+          const seen = new Set();
+          memories = memories.filter((m) => {
+            const key = m.text.trim().slice(0, 200);
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+
+          // Filter out raw Slack/system metadata noise
+          memories = memories.filter((m) => {
+            const t = m.text;
+            if (t.startsWith('[media attached:')) return false;
+            if (t.startsWith('[Slack file:') && t.length < 80) return false;
+            if (t.startsWith('System: [') && t.includes('Slack message') && t.split('\n').length < 3) return false;
+            if (t.includes('To send an image back, prefer the message tool')) return false;
+            return true;
+          });
+
+          // Limit to maxResults after filtering
+          memories = memories.slice(0, cfg.maxResults ?? 5);
           if (memories.length === 0) return;
 
           api.logger.info?.(
