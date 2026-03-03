@@ -179,6 +179,15 @@ def parse_turn(line: str, session_name: str) -> Optional[Dict[str, Any]]:
     if not content or len(content) < 5:
         return None
     
+    # Skip media attachment boilerplate and other noise
+    if content.startswith("[media attached:") or content.startswith("[Slack file:"):
+        return None
+    if "To send an image back, prefer the message tool" in content:
+        return None
+    # Skip very short messages (< 5 words)
+    if len(content.split()) < 5:
+        return None
+    
     turn_counter += 1
     
     return {
