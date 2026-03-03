@@ -197,7 +197,7 @@ Add to your `openclaw.json`:
           "vectorDim": 1024,
           "autoRecall": true,
           "autoCapture": false,
-          "minScore": 0.4,
+          "minScore": 0.55,
           "maxResults": 5
         }
       }
@@ -245,3 +245,35 @@ Built on top of [TrueRecall Base](https://gitlab.com/mdkrush/openclaw-true-recal
 ## License
 
 MIT
+
+## Tuning Tips
+
+### Memory Quality: minScore
+
+The `minScore` setting in the plugin config controls the minimum cosine similarity threshold for memories to be injected. Higher = more relevant but fewer results, lower = more results but noisier.
+
+| Value | Behavior |
+|-------|----------|
+| 0.4   | Very permissive — will include loosely related memories (may cause irrelevant context) |
+| 0.55  | **Recommended** — good balance of relevance and coverage |
+| 0.65+ | Strict — only highly relevant memories, may miss useful context |
+
+If you're seeing unrelated memories being injected (e.g., a screenshot discussion triggering memories about a different screenshot), raise minScore. If important context is being missed, lower it.
+
+### Filtering Noise
+
+The watcher and gems extractor both have built-in filters to prevent junk from entering the database:
+
+- **Watcher**: Skips messages under 5 words, media boilerplate (`[media attached:]`), and Slack file references
+- **Gems extractor**: Requires min 50 chars + 5 words per turn, min 30 chars + 5 words per gem, and uses a strict prompt to skip conversational noise ("ok", "thanks", emoji-only messages)
+
+### Pruning
+
+If your database already has junk entries, use the prune script:
+```bash
+# Dry run first
+python scripts/prune_short_memories.py --min-words 3 --dry-run
+
+# Actually prune
+python scripts/prune_short_memories.py --min-words 3
+```

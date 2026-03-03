@@ -362,6 +362,12 @@ async function startSSE() {
   const app = express();
   app.use(express.json());
 
+  // Request logging
+  app.use((req, _res, next) => {
+    console.log(`${req.method} ${req.path} ${JSON.stringify(req.query)} body=${JSON.stringify(req.body)?.slice(0, 200)}`);
+    next();
+  });
+
   // Auth middleware — skip health check and authenticated sessions
   if (MCP_AUTH_TOKEN) {
     app.use((req, res, next) => {
