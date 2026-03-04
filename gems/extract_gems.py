@@ -44,6 +44,72 @@ CATEGORIES = [
     "relationship",  # people, roles, connections
 ]
 
+# --- Pre-filters: skip or clean turns before sending to the LLM ---
+
+# Patterns that indicate the entire turn should be skipped (no LLM call)
+SKIP_PATTERNS = [
+    # Heartbeat / system polling
+    "Read HEARTBEAT.md",
+    "HEARTBEAT_OK",
+    "NO_REPLY",
+    # Queued message wrappers
+    "[Queued messages while agent was busy]",
+    # Pure metadata
+    '"schema": "openclaw.inbound_meta',
+    # Scheduled reminders (system-generated)
+    "A scheduled reminder has been triggered",
+    "Handle this reminder internally",
+    # Rate limit / system noise
+    "Rate limit hit",
+]
+
+import re
+
+# Regex patterns for content that should be stripped before LLM processing
+STRIP_PATTERNS = [
+    # <relevant-memories>...</relevant-memories> blocks (injected recall context)
+    re.compile(r'<relevant-memories>.*?</relevant-memories>', re.DOTALL),
+    # Conversation info metadata blocks
+    re.compile(r'Conversation info \(untrusted metadata\):\s*```json\s*\{[^}]*\}\s*```', re.DOTALL),
+    # Sender metadata blocks
+    re.compile(r'Sender \(untrusted metadata\):\s*```json\s*\{[^}]*\}\s*```', re.DOTALL),
+    # Inbound context JSON blocks
+    re.compile(r'```json\s*\{\s*"schema":\s*"openclaw\.inbound_meta[^`]*```', re.DOTALL),
+]
+
+
+def should_skip_turn(content, role="unknown"):
+    """Return True if this turn should be skipped entirely (no LLM call)."""
+    # Skip system role turns (prompts, not conversation)
+    if role == "system":
+        return True
+
+    # Check skip patterns
+    for pattern in SKIP_PATTERNS:
+        if pattern in content:
+            return True
+
+    # Skip turns that are mostly JSON/structured data (>60% curly/square braces + quotes)
+    if len(content) > 100:
+        structural_chars = sum(1 for c in content if c in '{}[]",:')
+        if structural_chars / len(content) > 0.4:
+            return True
+
+    return False
+
+
+def clean_content(content):
+    """Strip noisy metadata from content before sending to LLM."""
+    cleaned = content
+    for pattern in STRIP_PATTERNS:
+        cleaned = pattern.sub('', cleaned)
+
+    # Collapse excessive whitespace left by stripping
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip()
+
+    return cleaned
+
+
 SYSTEM_PROMPT = f"""You are a memory curator. Your job is to read a single conversation turn and decide if it contains information worth remembering long-term.
 
 Extract "gems" — concise, standalone facts that would be useful to recall weeks or months later.
@@ -299,10 +365,27 @@ def process_batch(batch_size=100, user_id="ava", dry_run=False):
             processed += 1
             continue
 
+        # Pre-filter: skip turns that are system noise, heartbeats, metadata, etc.
+        if should_skip_turn(content, role):
+            if not dry_run:
+                mark_processed(point_id)
+            processed += 1
+            continue
+
+        # Strip metadata/recall blocks from content before sending to LLM
+        cleaned = clean_content(content)
+
+        # After cleaning, re-check if there's enough substance left
+        if len(cleaned) < 50 or len(cleaned.split()) < 5:
+            if not dry_run:
+                mark_processed(point_id)
+            processed += 1
+            continue
+
         # Rate limit
         time.sleep(RATE_INTERVAL)
 
-        gems = llm_extract(content, role)
+        gems = llm_extract(cleaned, role)
 
         if dry_run:
             if gems:
